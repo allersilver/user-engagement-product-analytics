@@ -1,58 +1,117 @@
 # Content Quality & User Retention Analysis
-## Amazon 리뷰 데이터 기반 사용자 Retention 분석 프로젝트
+## 콘텐츠 품질이 사용자 재방문율을 결정한다
 
 ---
 
 ## 프로젝트 개요
-Amazon 리뷰 데이터의 콘텐츠 품질 점수를 기반으로
-사용자 행동 로그를 설계하고 **콘텐츠 품질과 Retention의 관계**를 분석한 프로젝트
 
-단순 분석을 넘어 Event Schema 설계 · 코호트 분석 · A/B Test까지
-데이터 기반 서비스 개선 전 과정을 직접 설계했다.
+Amazon 리뷰 데이터의 콘텐츠 품질 점수를 기반으로 사용자 행동 로그를 직접 설계하고,  
+**콘텐츠 품질 → 추천 다양성 → 재방문율**의 관계를 분석한 프로젝트.
 
----
-
-##  핵심 질문 
-> "콘텐츠 품질과 추천 다양성이 사용자 retention에 미치는 영향은 무엇인가?
->  그리고 이를 개선하기 위한 추천 정책을 어떻게 설계할 수 있는가?"
-
+단순 EDA가 아닌, Event Schema 설계부터 코호트 분석, A/B Test 설계 및 검증,  
+그리고 서비스 개선 제안까지 **데이터 기반 의사결정의 전 과정**을 직접 수행했다.
 
 ---
 
-## A/B Test 설계 결과
-| 실험 | 효과 | p-value | 결론 |
-|------|------|---------|------|
-| Quality-First 추천 | +6.1%p | 0.0011 | 전체 적용 권장 o |
-| 추천 다양성 Constraint | +28.7%p | <0.0001 | 전체 적용 권장 o |
+## 핵심 질문
+
+> "첫 세션의 콘텐츠 품질과 추천 다양성이 사용자 재방문율에 미치는 영향은 무엇인가?  
+> 그리고 이를 개선하기 위한 추천 정책을 어떻게 설계할 수 있는가?"
 
 ---
 
-## 기술 스택
-Python | Pandas | SQL (SQLite) | 코호트 분석 | A/B Test 설계 | KPI 설계
+## 분석 흐름
+---
+
+## 핵심 발견
+
+### 1. 첫 세션 콘텐츠 품질과 D7 Retention
+| 그룹 | D7 Retention |
+|------|-------------|
+| 고품질 콘텐츠 첫 노출 | **33.7%** |
+| 저품질 콘텐츠 첫 노출 | 26.4% |
+
+→ 첫 세션에서 고품질 콘텐츠를 본 사용자의 D7 Retention이 **7.3%p 높음**
+
+### 2. 추천 다양성과 D7 Retention
+| 그룹 | D7 Retention |
+|------|-------------|
+| 다양성 상위 그룹 | **40.5%** |
+| 다양성 하위 그룹 | 12.2% |
+
+→ 추천 다양성이 높은 사용자의 D7 Retention이 **3.3배(+28.3%p) 높음**
+
+---
+
+## A/B Test 설계 및 검증 결과
+
+코호트 분석에서 발견한 인사이트를 A/B Test로 실제 검증.
+
+| 실험 | 설계 | 효과 | p-value | 결론 |
+|------|------|------|---------|------|
+| 실험 1: Quality-First 추천 | 신규 유저 첫 피드에 품질 상위 30% 우선 노출 | **+6.1%p** | 0.0011 | 전체 적용 권장 |
+| 실험 2: 다양성 Constraint | 동일 카테고리 연속 추천 제한 | **+28.7%p** | <0.0001 | 전체 적용 권장 |
+
+**서비스 액션 우선순위**
+1. 추천 다양성 constraint 즉시 적용 (효과 크고 샘플 규모 작게 필요)
+2. 신규 유저 첫 피드 quality-first 추천 정책 적용
+
+---
+
+## Event Schema 설계
+
+실제 서비스 행동 로그가 없어, Amazon 리뷰 데이터의 품질 점수를 콘텐츠 품질 proxy로 활용해  
+**분석 목적에 맞는 이벤트 스키마를 직접 설계하고 합성 데이터를 생성**했다.
+
+**핵심 가설 3가지를 먼저 정의하고, 이를 검증할 수 있는 스키마를 역산해 설계**
+- 콘텐츠 품질이 높을수록 completion_rate가 높다
+- 첫 세션에서 고품질 콘텐츠에 노출된 사용자일수록 D7 Retention이 높다
+- 추천 다양성이 낮을수록 D30 Retention이 낮다
+
+**사용자 세그먼트 4가지 설계**
+| 세그먼트 | 비율 | 특징 |
+|---------|------|------|
+| Power User | 10% | 자주 방문, 높은 engagement |
+| Casual User | 35% | 가끔 방문, 보통 engagement |
+| At-risk User | 25% | 방문 감소 중, 이탈 위험 |
+| Churned User | 30% | 7일 이상 미접속 |
+
+→ 총 **9,050명 유저 · 24,134개 이벤트 로그** 생성
 
 ---
 
 ## 분석 구조
+
 | 노트북 | 내용 | 핵심 산출물 |
 |--------|------|------------|
-| 01_event_schema | 이벤트 로그 설계 및 합성 데이터 생성 | 24,134개 이벤트 로그 |
-| 02_cohort_retention | 코호트 분석 및 D7 Retention 측정 | 첫 세션 품질 → retention 관계 |
-| 03_recommendation | 추천 다양성 분석 | entropy 기반 다양성 → retention 관계 |
-| 04_ab_test_design | A/B Test 설계 및 시뮬레이션 | 두 실험 모두 통계적 유의미 |
-| 05_sql_analysis | SQL 기반 데이터 분석 | 세그먼트/카테고리별 행동 패턴 |
+| 01_event_schema | 가설 정의 → 스키마 설계 → 합성 데이터 생성 | 24,134개 이벤트 로그 |
+| 02_cohort_retention | 코호트 분석 및 D7 Retention 측정 | 고품질 33.7% vs 저품질 26.4% |
+| 03_recommendation | Shannon Entropy 기반 추천 다양성 분석 | 다양성 상위 40.5% vs 하위 12.2% |
+| 04_ab_test | A/B Test 설계 및 통계 검증 | 두 실험 모두 p<0.05 유의미 |
+| 05_sql_analysis | SQL 기반 세그먼트·카테고리별 행동 패턴 분석 | 세그먼트별 행동 차이 정량화 |
+
+---
+
+## 기술 스택
+
+Python | Pandas | NumPy | SciPy | SQLite | Matplotlib | Seaborn  
+코호트 분석 | Shannon Entropy | A/B Test 설계 | KPI 설계 | 샘플 사이즈 계산
 
 ---
 
 ## 데이터 한계
+
 - Amazon 리뷰 데이터를 콘텐츠 품질 proxy로 활용 (실제 watch_time 로그 없음)
 - 사용자 행동은 합성 데이터로 생성 (실제 서비스 로그와 다를 수 있음)
-- 카테고리가 3개에 집중되어 다양성 측정에 제한적
+- 카테고리가 3개에 집중되어 diversity entropy 범위가 제한적
 
 ---
 
 ## 데이터 출처
-- Amazon Sales Dataset (Kaggle)
-- 사용자 행동 로그: 합성 데이터 
 
-## 참고
-- 데이터 전처리 과정: [Amazon Review QA Analysis](https://github.com/allersilver/amazon-review-qa-analysis)
+- Amazon Sales Dataset (Kaggle)
+- 사용자 행동 로그: 합성 데이터 (설계 과정: `01_event_schema.ipynb`)
+
+## 관련 프로젝트
+
+- 데이터 전처리 및 QA 분석: [Amazon Review QA Analysis](https://github.com/allersilver/amazon-review-qa-analysis)
